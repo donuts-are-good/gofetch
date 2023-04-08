@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/donuts-are-good/colors"
 )
 
 type Specs struct {
@@ -24,7 +27,17 @@ type Specs struct {
 	DiskUsage  string
 }
 
+var noColors bool
+
+func init() {
+	flag.BoolVar(&noColors, "nocolors", false, "Disable colored output")
+	flag.Parse()
+}
+
 func main() {
+	if noColors {
+		disableColors()
+	}
 	info := &Specs{}
 	infoChan := make(chan Specs, 1)
 	var wg sync.WaitGroup
@@ -39,17 +52,17 @@ func main() {
 	info.Shell = newInfo.Shell
 	info.CPU = newInfo.CPU
 	info.RAM = newInfo.RAM
-	fmt.Println(info.Userhost)
+	fmt.Println(colors.BrightMagenta + newInfo.Userhost + colors.Nc)
 	fmt.Println("------------")
-	fmt.Println("OS:     ", info.OS)
-	fmt.Println("Kernel: ", info.Kernel)
-	fmt.Println("Uptime: ", info.Uptime)
-	fmt.Println("Shell:  ", info.Shell)
-	fmt.Println("CPU:    ", info.CPU)
-	fmt.Println("RAM:    ", info.RAM)
-	fmt.Println("GPU:    ", info.GPU)
-	fmt.Println("Arch:   ", info.SystemArch)
-	fmt.Println("Disk:   ", info.DiskUsage)
+	fmt.Println(colors.Cyan+"OS:     "+colors.Nc, info.OS)
+	fmt.Println(colors.Cyan+"Kernel: "+colors.Nc, info.Kernel)
+	fmt.Println(colors.Cyan+"Uptime: "+colors.Nc, info.Uptime)
+	fmt.Println(colors.Cyan+"Shell:  "+colors.Nc, info.Shell)
+	fmt.Println(colors.Cyan+"CPU:    "+colors.Nc, info.CPU)
+	fmt.Println(colors.Cyan+"RAM:    "+colors.Nc, info.RAM)
+	fmt.Println(colors.Cyan+"GPU:    "+colors.Nc, info.GPU)
+	fmt.Println(colors.Cyan+"Arch:   "+colors.Nc, info.SystemArch)
+	fmt.Println(colors.Cyan+"Disk:   "+colors.Nc, info.DiskUsage)
 }
 
 func getSpecs(info *Specs, infoChan chan Specs, wg *sync.WaitGroup) {
@@ -65,6 +78,11 @@ func getSpecs(info *Specs, infoChan chan Specs, wg *sync.WaitGroup) {
 	info.SystemArch, _ = getSystemArch()
 	info.DiskUsage, _ = getDiskUsage()
 	infoChan <- *info
+}
+func disableColors() {
+	colors.BrightMagenta = ""
+	colors.Cyan = ""
+	colors.Nc = ""
 }
 
 func getGPUInfo() (string, error) {
@@ -167,7 +185,7 @@ func getDiskUsage() (string, error) {
 				totalFree += free
 			}
 		}
-		return fmt.Sprintf("Total: %d GB, Free: %d GB", totalSize/(1024*1024*1024), totalFree/(1024*1024*1024)), nil
+		return fmt.Sprintf(colors.Cyan+"Total: "+colors.Nc+"%d GB, Free: %d GB", totalSize/(1024*1024*1024), totalFree/(1024*1024*1024)), nil
 	}
 
 	if runtime.GOOS == "darwin" {
@@ -184,7 +202,7 @@ func getDiskUsage() (string, error) {
 					return "", fmt.Errorf("error parsing avail value: %v", err)
 				}
 				used := size - avail
-				return fmt.Sprintf("Total: %.1fG\nDisk:    Free:  %.1fG\nDisk:    Used:  %.1fG", size, avail, used), nil
+				return fmt.Sprintf("Total: "+colors.Nc+"%.1fG\n"+colors.Cyan+"Disk:    "+colors.Nc+"Free:  %.1fG\n"+colors.Cyan+"Disk:    "+colors.Nc+"Used:  %.1fG", size, avail, used), nil
 			}
 		}
 		return "", fmt.Errorf("error parsing disk usage on %s", runtime.GOOS)
@@ -196,7 +214,7 @@ func getDiskUsage() (string, error) {
 	if len(fields) < 5 {
 		return "", fmt.Errorf("error parsing disk usage on %s", runtime.GOOS)
 	}
-	return fmt.Sprintf("Total: %s, Free: %s, Used: %s", fields[1], fields[3], fields[2]), nil
+	return fmt.Sprintf(colors.Cyan+"Total: "+colors.Nc+"%s, Free: %s, Used: %s", fields[1], fields[3], fields[2]), nil
 }
 
 func getUserHostname() string {
