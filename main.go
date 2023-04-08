@@ -27,16 +27,24 @@ type Specs struct {
 	DiskUsage  string
 }
 
-var noColors bool
+var (
+	noColors bool
+	help     bool
+)
 
 func init() {
 	flag.BoolVar(&noColors, "nocolors", false, "Disable colored output")
+	flag.BoolVar(&help, "help", false, "Show help message")
 	flag.Parse()
 }
 
 func main() {
 	if noColors {
 		disableColors()
+	}
+	if help {
+		showHelp()
+		return
 	}
 	info := &Specs{}
 	infoChan := make(chan Specs, 1)
@@ -79,6 +87,20 @@ func getSpecs(info *Specs, infoChan chan Specs, wg *sync.WaitGroup) {
 	info.DiskUsage, _ = getDiskUsage()
 	infoChan <- *info
 }
+
+func showHelp() {
+	fmt.Println(`
+Usage: gofetch [OPTIONS]
+
+gofetch is a tool to display system information, such as OS, kernel, uptime, shell, CPU, RAM, GPU, architecture, and disk usage.
+
+OPTIONS:
+  -nocolors     Disable colored output
+
+Example:
+  gofetch -nocolors`)
+}
+
 func disableColors() {
 	colors.BrightMagenta = ""
 	colors.Cyan = ""
