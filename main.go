@@ -12,13 +12,16 @@ import (
 )
 
 type Specs struct {
-	Userhost string
-	OS       string
-	Kernel   string
-	Uptime   string
-	Shell    string
-	CPU      string
-	RAM      string
+	Userhost   string
+	OS         string
+	Kernel     string
+	Uptime     string
+	Shell      string
+	CPU        string
+	RAM        string
+	GPU        string
+	SystemArch string
+	DiskUsage  string
 }
 
 func main() {
@@ -44,6 +47,9 @@ func main() {
 	fmt.Println("Shell:  ", info.Shell)
 	fmt.Println("CPU:    ", info.CPU)
 	fmt.Println("RAM:    ", info.RAM)
+	fmt.Println("GPU:    ", info.GPU)
+	fmt.Println("Arch:   ", info.SystemArch)
+	fmt.Println("Disk:   ", info.DiskUsage)
 }
 
 func getSpecs(info *Specs, infoChan chan Specs, wg *sync.WaitGroup) {
@@ -55,7 +61,142 @@ func getSpecs(info *Specs, infoChan chan Specs, wg *sync.WaitGroup) {
 	info.Shell = getShell()
 	info.CPU = getCPUName()
 	info.RAM = getMemStats()
+	info.GPU, _ = getGPUInfo()
+	info.SystemArch, _ = getSystemArch()
+	info.DiskUsage, _ = getDiskUsage()
 	infoChan <- *info
+}
+
+func getGPUInfo() (string, error) {
+	var output []byte
+	var err error
+
+	switch runtime.GOOS {
+	case "windows":
+		output, err = exec.Command("wmic", "path", "win32_VideoController", "get", "name").Output()
+		if err != nil {
+			return "", fmt.Errorf("error retrieving GPU information on Windows: %v", err)
+		}
+	case "darwin":
+		output, err = exec.Command("system_profiler", "SPDisplaysDataType").Output()
+		if err != nil {
+			return "", fmt.Errorf("error retrieving GPU information on macOS: %v", err)
+		}
+	case "linux":
+		output, err = exec.Command("lspci", "-vnn").Output()
+		if err != nil {
+			return "", fmt.Errorf("error retrieving GPU information on Linux: %v", err)
+		}
+	default:
+		return "", fmt.Errorf("error: GPU information retrieval not implemented for %s", runtime.GOOS)
+	}
+
+	outputStr := strings.TrimSpace(string(output))
+
+	if runtime.GOOS == "windows" {
+		lines := strings.Split(outputStr, "\r\n")[1:]
+		gpuName := strings.TrimSpace(strings.Join(lines, " "))
+		return gpuName, nil
+	}
+
+	if runtime.GOOS == "darwin" {
+		lines := strings.Split(outputStr, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "Chipset Model:") {
+				fields := strings.Split(line, ":")
+				if len(fields) >= 2 {
+					gpuName := strings.TrimSpace(fields[1])
+					return gpuName, nil
+				}
+			}
+		}
+		return "", fmt.Errorf("error parsing GPU information on macOS")
+	}
+
+	lines := strings.Split(outputStr, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "VGA compatible controller") {
+			fields := strings.Fields(line)
+			if len(fields) > 2 {
+				gpuName := strings.Join(fields[2:], " ")
+				return gpuName, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("error parsing GPU information on Linux")
+}
+
+func getSystemArch() (string, error) {
+	arch := runtime.GOARCH
+	if arch == "" {
+		return "", fmt.Errorf("unable to determine system architecture")
+	}
+	return arch, nil
+}
+
+func getDiskUsage() (string, error) {
+	var output []byte
+	var err error
+
+	switch runtime.GOOS {
+	case "windows":
+		output, err = exec.Command("wmic", "logicaldisk", "where", "drivetype=3", "get", "size,freespace").Output()
+		if err != nil {
+			return "", fmt.Errorf("error retrieving disk usage on Windows: %v", err)
+		}
+	case "darwin", "linux":
+		output, err = exec.Command("df", "-h", "-t").Output()
+		if err != nil {
+			return "", fmt.Errorf("error retrieving disk usage on %s: %v", runtime.GOOS, err)
+		}
+	default:
+		return "", fmt.Errorf("error: Disk usage retrieval not implemented for %s", runtime.GOOS)
+	}
+
+	outputStr := strings.TrimSpace(string(output))
+
+	if runtime.GOOS == "windows" {
+		lines := strings.Split(outputStr, "\r\n")[1:]
+		var totalSize, totalFree uint64
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) == 2 {
+				size, _ := strconv.ParseUint(fields[0], 10, 64)
+				free, _ := strconv.ParseUint(fields[1], 10, 64)
+				totalSize += size
+				totalFree += free
+			}
+		}
+		return fmt.Sprintf("Total: %d GB, Free: %d GB", totalSize/(1024*1024*1024), totalFree/(1024*1024*1024)), nil
+	}
+
+	if runtime.GOOS == "darwin" {
+		lines := strings.Split(outputStr, "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) >= 4 && strings.Contains(fields[0], "/dev/") && fields[8] == "/" {
+				size, err := strconv.ParseFloat(strings.TrimRight(fields[1], "BGMi"), 64)
+				if err != nil {
+					return "", fmt.Errorf("error parsing size value: %v", err)
+				}
+				avail, err := strconv.ParseFloat(strings.TrimRight(fields[3], "BGMi"), 64)
+				if err != nil {
+					return "", fmt.Errorf("error parsing avail value: %v", err)
+				}
+				used := size - avail
+				return fmt.Sprintf("Total: %.1fG\nDisk:    Free:  %.1fG\nDisk:    Used:  %.1fG", size, avail, used), nil
+			}
+		}
+		return "", fmt.Errorf("error parsing disk usage on %s", runtime.GOOS)
+	}
+
+	lines := strings.Split(outputStr, "\n")
+	totalLine := lines[len(lines)-2]
+	fields := strings.Fields(totalLine)
+	if len(fields) < 5 {
+		return "", fmt.Errorf("error parsing disk usage on %s", runtime.GOOS)
+	}
+	return fmt.Sprintf("Total: %s, Free: %s, Used: %s", fields[1], fields[3], fields[2]), nil
 }
 
 func getUserHostname() string {
