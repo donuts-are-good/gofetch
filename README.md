@@ -6,21 +6,20 @@ just a simple fetch thing for your terminal
 ## looks like this
 
 ```bash
-╭─dh@lisa ~/Projects/gofetch ‹master●› 
-╰─$ go build && ./gofetch           
+dh@/Users/dh » gofetch
 dh@lisa.local
 ------------
 OS:      darwin
-Kernel:  22.1.0
-Uptime:  7 days
+Kernel:  23.0.0
+Uptime:   7:55
 Shell:   zsh
 CPU:     arm64
 RAM:     8192MB
 GPU:     Apple M2
 Arch:    arm64
-Disk:    Total: 373.0G
-Disk:    Free:  142.0G
-Disk:    Used:  231.0G
+Disk:    Total: 460.0G
+Disk:    Free:  143.0G
+Disk:    Used:  317.0G
 ```
 
 ## built like this
