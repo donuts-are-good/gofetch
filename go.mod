@@ -1,4 +1,4 @@
-module gofetch
+module github.com/donuts-are-good/gofetch
 
 go 1.19
 
