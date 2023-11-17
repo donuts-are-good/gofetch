@@ -39,6 +39,11 @@ func init() {
 }
 
 func main() {
+
+	if _, ok := os.LookupEnv("NO_COLOR"); ok {
+			disableColors()
+	}
+	
 	if noColors {
 		disableColors()
 	}
